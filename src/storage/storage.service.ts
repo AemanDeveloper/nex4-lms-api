@@ -80,8 +80,6 @@ export class StorageService {
         Bucket: this.bucket(),
         Key: objectKey,
         ContentType: file.contentType,
-        ContentLength: input.sizeBytes,
-        Metadata: { organisation: organisationId, uploader: userId },
       }),
       { expiresIn: 600 },
     );
