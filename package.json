@@ -3,12 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
+  "packageManager": "npm@11.9.0",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11.9 <12"
+  },
   "scripts": {
     "build": "npm run db:generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"prisma/**/*.prisma\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/src/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings=0",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
