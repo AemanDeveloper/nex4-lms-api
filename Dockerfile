@@ -3,7 +3,9 @@ WORKDIR /app
 RUN npm install --global npm@11.9.0
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci
+# Resolve Linux-only optional packages inside the Linux image. The committed
+# lockfile is produced on Windows and npm ci rejects those platform additions.
+RUN npm install --include=dev --no-audit --no-fund
 RUN npm run db:generate
 
 FROM dependencies AS build
