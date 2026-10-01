@@ -23,10 +23,13 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "owner:provision": "tsx src/scripts/provision-owner.ts",
+    "owner:mfa:generate": "tsx src/scripts/generate-owner-mfa.ts",
     "worker": "tsx src/worker.ts",
     "jobs:schedule": "tsx src/jobs/schedule-lifecycle.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1144.0",
+    "@aws-sdk/s3-request-presigner": "3.1144.0",
     "@nestjs/bullmq": "latest",
     "@nestjs/common": "latest",
     "@nestjs/config": "latest",
