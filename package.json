@@ -15,6 +15,7 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/src/main.js",
     "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings=0",
+    "pretest": "npm run db:generate",
     "test": "vitest run",
     "test:cov": "vitest run --coverage",
     "db:generate": "prisma generate",
@@ -49,7 +50,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "latest",
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "9.39.5",
     "@nestjs/cli": "latest",
     "@nestjs/schematics": "latest",
     "@nestjs/testing": "latest",
