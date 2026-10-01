@@ -3,7 +3,7 @@ WORKDIR /app
 RUN npm install --global npm@11.9.0
 COPY package*.json ./
 COPY prisma ./prisma
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 RUN npm run db:generate
 
 FROM dependencies AS build
