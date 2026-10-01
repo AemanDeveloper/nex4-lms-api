@@ -12,7 +12,9 @@ import { LearningModule } from './learning/learning.module';
 import { JobsModule } from './jobs/jobs.module';
 import { OwnerModule } from './owner/owner.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { StorageModule } from './storage/storage.module';
 import { TrialModule } from './trial/trial.module';
+import { WorkspaceModule } from './workspace/workspace.module';
 
 function validateEnvironment(environment: Record<string, unknown>) {
   const required = [
@@ -47,6 +49,8 @@ function validateEnvironment(environment: Record<string, unknown>) {
     DemoModule,
     TrialModule,
     OwnerModule,
+    StorageModule,
+    WorkspaceModule,
   ],
   controllers: [HealthController],
   providers: [

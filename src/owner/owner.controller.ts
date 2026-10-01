@@ -32,6 +32,11 @@ export class OwnerController {
     return this.trials.reject(id, request.owner.sub);
   }
 
+  @Post('trial-requests/:id/resend-activation')
+  resendTrialActivation(@Param('id') id: string, @Req() request: OwnerRequest) {
+    return this.trials.resendActivation(id, request.owner.sub);
+  }
+
   @Get('organisations')
   async listOrganisations() {
     const organisations = await this.prisma.organisation.findMany({

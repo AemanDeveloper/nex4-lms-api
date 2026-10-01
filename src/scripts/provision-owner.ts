@@ -20,8 +20,8 @@ async function run() {
     if (existingOwner && existingOwner.email !== email) throw new Error('A platform owner is already provisioned.');
     const owner = await prisma.user.upsert({
       where: { email },
-      update: { passwordHash: await hash(password), isPlatformOwner: true, mfaEnrolledAt: new Date(), emailVerifiedAt: new Date() },
-      create: { email, passwordHash: await hash(password), isPlatformOwner: true, mfaEnrolledAt: new Date(), emailVerifiedAt: new Date() },
+      update: { passwordHash: await hash(password), isPlatformOwner: true, mfaEnrolledAt: new Date(), mfaLastUsedStep: null, emailVerifiedAt: new Date() },
+      create: { email, passwordHash: await hash(password), isPlatformOwner: true, mfaEnrolledAt: new Date(), mfaLastUsedStep: null, emailVerifiedAt: new Date() },
     });
     await prisma.auditLog.create({ data: { actorUserId: owner.id, action: 'owner.provisioned', targetType: 'user', targetId: owner.id, metadata: { method: 'deployment-command' } } });
     process.stdout.write('Private platform account provisioned.\n');

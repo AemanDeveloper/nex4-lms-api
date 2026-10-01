@@ -24,12 +24,17 @@ function codeAt(secret: string, counter: number) {
 }
 
 export function verifyTotp(secret: string, submittedCode: string, now = Date.now()) {
-  if (!/^\d{6}$/.test(submittedCode)) return false;
+  return matchTotpCounter(secret, submittedCode, now) !== null;
+}
+
+export function matchTotpCounter(secret: string, submittedCode: string, now = Date.now()) {
+  if (!/^\d{6}$/.test(submittedCode)) return null;
   const counter = Math.floor(now / 30_000);
-  return [-1, 0, 1].some((drift) => {
+  for (const drift of [-1, 0, 1]) {
     const expected = Buffer.from(codeAt(secret, counter + drift));
     const submitted = Buffer.from(submittedCode);
-    return expected.length === submitted.length && timingSafeEqual(expected, submitted);
-  });
+    if (expected.length === submitted.length && timingSafeEqual(expected, submitted)) return counter + drift;
+  }
+  return null;
 }
 

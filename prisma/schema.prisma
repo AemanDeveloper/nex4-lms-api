@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
@@ -57,45 +57,53 @@ enum SubscriptionStatus {
   CANCELED
 }
 
+enum StoredFileStatus {
+  PENDING
+  READY
+}
+
 model User {
-  id             String       @id @default(uuid(7)) @db.Uuid
-  email          String       @unique
-  passwordHash   String?
+  id              String       @id @default(uuid(7)) @db.Uuid
+  email           String       @unique
+  passwordHash    String?
   emailVerifiedAt DateTime?
   isPlatformOwner Boolean      @default(false)
-  mfaEnrolledAt  DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  memberships    Membership[]
-  auditEvents    AuditLog[]    @relation("AuditActor")
+  mfaEnrolledAt   DateTime?
+  mfaLastUsedStep BigInt?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  memberships     Membership[]
+  auditEvents     AuditLog[]   @relation("AuditActor")
+  storedFiles     StoredFile[] @relation("StoredFileUploader")
 
   @@map("users")
 }
 
 model Organisation {
-  id                       String             @id @default(uuid(7)) @db.Uuid
-  name                     String
-  slug                     String             @unique
-  type                     OrganisationType
-  country                  String             @db.VarChar(2)
-  preferredCurrency        String             @db.VarChar(3)
-  status                   OrganisationStatus @default(TRIAL)
-  trialStartedAt           DateTime?
-  trialEndsAt              DateTime?
-  recoveryEndsAt           DateTime?
-  stripeCustomerId         String?            @unique
-  stripeSubscriptionId     String?            @unique
-  subscriptionPlan         SubscriptionPlan?
-  subscriptionStatus       SubscriptionStatus @default(INACTIVE)
-  storageUsedBytes         BigInt             @default(0)
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
-  branches                 Branch[]
-  memberships              Membership[]
-  courses                  Course[]
-  announcements            Announcement[]
-  auditEvents              AuditLog[]
-  trialRequest             TrialRequest?
+  id                   String             @id @default(uuid(7)) @db.Uuid
+  name                 String
+  slug                 String             @unique
+  type                 OrganisationType
+  country              String             @db.VarChar(2)
+  preferredCurrency    String             @db.VarChar(3)
+  status               OrganisationStatus @default(TRIAL)
+  trialStartedAt       DateTime?
+  trialEndsAt          DateTime?
+  recoveryEndsAt       DateTime?
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  subscriptionPlan     SubscriptionPlan?
+  subscriptionStatus   SubscriptionStatus @default(INACTIVE)
+  storageUsedBytes     BigInt             @default(0)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  branches             Branch[]
+  memberships          Membership[]
+  courses              Course[]
+  announcements        Announcement[]
+  auditEvents          AuditLog[]
+  trialRequest         TrialRequest?
+  storedFiles          StoredFile[]
 
   @@index([status])
   @@map("organisations")
@@ -131,32 +139,56 @@ model Membership {
 }
 
 model TrialRequest {
-  id                    String             @id @default(uuid(7)) @db.Uuid
-  name                  String
-  email                 String
-  emailVerifiedAt       DateTime?
-  organisationName      String
-  organisationType      OrganisationType
-  country               String             @db.VarChar(2)
-  intendedUse           String
-  estimatedLearners     Int
-  estimatedTeachers     Int
-  preferredCurrency     String             @db.VarChar(3)
-  termsAcceptedAt       DateTime
-  status                TrialRequestStatus @default(EMAIL_PENDING)
-  verificationTokenHash String?            @unique
-  activationTokenHash   String?            @unique
-  activationExpiresAt   DateTime?
-  reviewedByOwnerId     String?            @db.Uuid
-  reviewedAt            DateTime?
-  organisationId        String?            @unique @db.Uuid
-  organisation          Organisation?      @relation(fields: [organisationId], references: [id])
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  id                      String             @id @default(uuid(7)) @db.Uuid
+  name                    String
+  email                   String
+  emailVerifiedAt         DateTime?
+  organisationName        String
+  organisationType        OrganisationType
+  country                 String             @db.VarChar(2)
+  intendedUse             String
+  estimatedLearners       Int
+  estimatedTeachers       Int
+  preferredCurrency       String             @db.VarChar(3)
+  termsAcceptedAt         DateTime
+  status                  TrialRequestStatus @default(EMAIL_PENDING)
+  verificationTokenHash   String?            @unique
+  verificationEmailId     String?
+  verificationEmailSentAt DateTime?
+  activationTokenHash     String?            @unique
+  activationExpiresAt     DateTime?
+  activationEmailId       String?
+  activationEmailSentAt   DateTime?
+  reviewedByOwnerId       String?            @db.Uuid
+  reviewedAt              DateTime?
+  organisationId          String?            @unique @db.Uuid
+  organisation            Organisation?      @relation(fields: [organisationId], references: [id])
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
   @@index([email])
   @@index([status, createdAt])
   @@map("trial_requests")
+}
+
+model StoredFile {
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organisationId   String           @db.Uuid
+  uploadedByUserId String           @db.Uuid
+  objectKey        String           @unique
+  fileName         String
+  contentType      String           @db.VarChar(127)
+  sizeBytes        BigInt
+  status           StoredFileStatus @default(PENDING)
+  etag             String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  uploadedBy       User             @relation("StoredFileUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, status, createdAt])
+  @@index([uploadedByUserId, createdAt])
+  @@map("stored_files")
 }
 
 model Course {

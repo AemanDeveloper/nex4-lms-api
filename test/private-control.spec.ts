@@ -4,7 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { PrivateOwnerGuard } from '../src/owner/private-owner.guard';
-import { verifyTotp } from '../src/owner/totp';
+import { matchTotpCounter, verifyTotp } from '../src/owner/totp';
 
 const secret = 'application-secret-with-more-than-thirty-two-characters';
 
@@ -33,5 +33,9 @@ describe('private control plane', () => {
   it('validates a standards-based six-digit authenticator code', () => {
     expect(verifyTotp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 59_000)).toBe(true);
     expect(verifyTotp('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '000000', 59_000)).toBe(false);
+  });
+
+  it('returns the accepted time step so a code cannot be reused', () => {
+    expect(matchTotpCounter('GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ', '287082', 59_000)).toBe(1);
   });
 });

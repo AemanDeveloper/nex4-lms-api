@@ -2,6 +2,7 @@ import { Body, Controller, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ActivateTrialDto } from './dto/activate-trial.dto';
 import { RequestTrialDto } from './dto/request-trial.dto';
+import { ResendTrialEmailDto } from './dto/resend-trial-email.dto';
 import { TrialService } from './trial.service';
 
 @ApiTags('trial access')
@@ -17,6 +18,11 @@ export class TrialController {
   @Post('verify/:token')
   verify(@Param('token') token: string) {
     return this.trials.verifyEmail(token);
+  }
+
+  @Post(':id/resend-verification')
+  resendVerification(@Param('id') id: string, @Body() body: ResendTrialEmailDto) {
+    return this.trials.resendVerification(id, body);
   }
 
   @Post('activate/:token')
