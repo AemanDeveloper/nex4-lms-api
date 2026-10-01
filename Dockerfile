@@ -1,5 +1,6 @@
 FROM node:24-alpine AS dependencies
 WORKDIR /app
+RUN npm install --global npm@11.9.0
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm ci
@@ -18,4 +19,4 @@ COPY prisma ./prisma
 COPY --from=build /app/dist ./dist
 USER node
 EXPOSE 4000
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]
