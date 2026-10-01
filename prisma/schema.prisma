@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum OrganisationType {
+  INTERNATIONAL_SCHOOL
+  PRIVATE_SCHOOL
+  TUITION_CENTRE
+  ENRICHMENT_CENTRE
+  KINDERGARTEN
+  PRESCHOOL
+  OTHER
+}
+
+enum OrganisationStatus {
+  TRIAL
+  ACTIVE
+  READ_ONLY
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+}
+
+enum MembershipRole {
+  STUDENT
+  GUARDIAN
+  TEACHER
+  ORGANISATION_ADMIN
+}
+
+enum TrialRequestStatus {
+  EMAIL_PENDING
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+  ACTIVATED
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  INACTIVE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model User {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  email          String       @unique
+  passwordHash   String?
+  emailVerifiedAt DateTime?
+  isPlatformOwner Boolean      @default(false)
+  mfaEnrolledAt  DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  memberships    Membership[]
+  auditEvents    AuditLog[]    @relation("AuditActor")
+
+  @@map("users")
+}
+
+model Organisation {
+  id                       String             @id @default(uuid(7)) @db.Uuid
+  name                     String
+  slug                     String             @unique
+  type                     OrganisationType
+  country                  String             @db.VarChar(2)
+  preferredCurrency        String             @db.VarChar(3)
+  status                   OrganisationStatus @default(TRIAL)
+  trialStartedAt           DateTime?
+  trialEndsAt              DateTime?
+  recoveryEndsAt           DateTime?
+  stripeCustomerId         String?            @unique
+  stripeSubscriptionId     String?            @unique
+  subscriptionPlan         SubscriptionPlan?
+  subscriptionStatus       SubscriptionStatus @default(INACTIVE)
+  storageUsedBytes         BigInt             @default(0)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  branches                 Branch[]
+  memberships              Membership[]
+  courses                  Course[]
+  announcements            Announcement[]
+  auditEvents              AuditLog[]
+  trialRequest             TrialRequest?
+
+  @@index([status])
+  @@map("organisations")
+}
+
+model Branch {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  organisationId String       @db.Uuid
+  name           String
+  timezone       String       @default("Asia/Kuala_Lumpur")
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("branches")
+}
+
+model Membership {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  organisationId String         @db.Uuid
+  userId         String         @db.Uuid
+  role           MembershipRole
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+
+  @@unique([organisationId, userId, role])
+  @@index([organisationId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model TrialRequest {
+  id                    String             @id @default(uuid(7)) @db.Uuid
+  name                  String
+  email                 String
+  emailVerifiedAt       DateTime?
+  organisationName      String
+  organisationType      OrganisationType
+  country               String             @db.VarChar(2)
+  intendedUse           String
+  estimatedLearners     Int
+  estimatedTeachers     Int
+  preferredCurrency     String             @db.VarChar(3)
+  termsAcceptedAt       DateTime
+  status                TrialRequestStatus @default(EMAIL_PENDING)
+  verificationTokenHash String?            @unique
+  activationTokenHash   String?            @unique
+  activationExpiresAt   DateTime?
+  reviewedByOwnerId     String?            @db.Uuid
+  reviewedAt            DateTime?
+  organisationId        String?            @unique @db.Uuid
+  organisation          Organisation?      @relation(fields: [organisationId], references: [id])
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  @@index([email])
+  @@index([status, createdAt])
+  @@map("trial_requests")
+}
+
+model Course {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  organisationId String       @db.Uuid
+  title          String
+  description    String
+  published      Boolean      @default(false)
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lessons        Lesson[]
+  assignments    Assignment[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organisationId])
+  @@map("courses")
+}
+
+model Lesson {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  courseId  String   @db.Uuid
+  title     String
+  content   Json
+  position  Int
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseId, position])
+  @@index([courseId])
+  @@map("lessons")
+}
+
+model Assignment {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  courseId  String    @db.Uuid
+  title     String
+  dueAt     DateTime?
+  points    Int
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([courseId])
+  @@map("assignments")
+}
+
+model Announcement {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  organisationId String       @db.Uuid
+  title          String
+  body           String
+  publishedAt    DateTime
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([organisationId, publishedAt])
+  @@map("announcements")
+}
+
+model AuditLog {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  organisationId String?       @db.Uuid
+  actorUserId    String?       @db.Uuid
+  action         String
+  targetType     String
+  targetId       String?
+  ipAddress      String?
+  userAgent      String?
+  metadata       Json
+  createdAt      DateTime      @default(now())
+  organisation   Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
