@@ -1,10 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   PayloadTooLargeException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { MembershipRole } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import {
   DeleteObjectCommand,
@@ -139,10 +142,10 @@ export class StorageService {
     return this.serialize(completed);
   }
 
-  async list(organisationId: string) {
+  async list(organisationId: string, userId: string, role: MembershipRole) {
     const files = await this.prisma.forOrganisation(organisationId, (transaction) =>
       transaction.storedFile.findMany({
-        where: { organisationId, status: 'READY' },
+        where: { organisationId, status: 'READY', ...(role === MembershipRole.ORGANISATION_ADMIN ? {} : { uploadedByUserId: userId }) },
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
@@ -150,10 +153,20 @@ export class StorageService {
     return files.map((file) => this.serialize(file));
   }
 
-  async createDownload(organisationId: string, fileId: string) {
-    const file = await this.prisma.forOrganisation(organisationId, (transaction) =>
-      transaction.storedFile.findFirst({ where: { id: fileId, organisationId, status: 'READY' } }),
-    );
+  async createDownload(organisationId: string, userId: string, role: MembershipRole, fileId: string) {
+    const file = await this.prisma.forOrganisation(organisationId, async (transaction) => {
+      const found = await transaction.storedFile.findFirst({ where: { id: fileId, organisationId, status: 'READY' } });
+      if (!found) return null;
+      if (role === MembershipRole.ORGANISATION_ADMIN || found.uploadedByUserId === userId) return found;
+      if (role !== MembershipRole.TEACHER) return null;
+      const teacher = await transaction.membership.findUnique({ where: { organisationId_userId_role: { organisationId, userId, role: MembershipRole.TEACHER } } });
+      if (!teacher) return null;
+      const [submissionAccess, quizAccess] = await Promise.all([
+        transaction.submissionAttachment.findFirst({ where: { storedFileId: fileId, submission: { assignment: { course: { classes: { some: { class: { teachers: { some: { teacherMembershipId: teacher.id } } } } } } } } } }),
+        transaction.quizAnswer.findFirst({ where: { storedFileId: fileId, attempt: { quiz: { course: { classes: { some: { class: { teachers: { some: { teacherMembershipId: teacher.id } } } } } } } } } }),
+      ]);
+      return submissionAccess || quizAccess ? found : null;
+    });
     if (!file) throw new NotFoundException();
     const downloadUrl = await getSignedUrl(
       this.getClient(),
@@ -168,11 +181,22 @@ export class StorageService {
     return { downloadUrl, expiresInSeconds: 300 };
   }
 
-  async remove(organisationId: string, userId: string, fileId: string) {
+  async remove(organisationId: string, userId: string, role: MembershipRole, fileId: string) {
     const file = await this.prisma.forOrganisation(organisationId, (transaction) =>
       transaction.storedFile.findFirst({ where: { id: fileId, organisationId, status: 'READY' } }),
     );
     if (!file) throw new NotFoundException();
+    if (role !== MembershipRole.ORGANISATION_ADMIN && file.uploadedByUserId !== userId) {
+      throw new ForbiddenException({ code: 'FILE_ACCESS_DENIED', message: 'You cannot remove this file.' });
+    }
+    const linked = await this.prisma.forOrganisation(organisationId, async (transaction) => {
+      const [submission, quiz] = await Promise.all([
+        transaction.submissionAttachment.findUnique({ where: { storedFileId: fileId }, select: { id: true } }),
+        transaction.quizAnswer.findFirst({ where: { storedFileId: fileId }, select: { id: true } }),
+      ]);
+      return Boolean(submission || quiz);
+    });
+    if (linked) throw new ConflictException({ code: 'FILE_IN_USE', message: 'This file is attached to coursework and cannot be removed.' });
 
     await this.getClient().send(new DeleteObjectCommand({ Bucket: this.bucket(), Key: file.objectKey }));
     await this.prisma.forOrganisation(organisationId, async (transaction) => {

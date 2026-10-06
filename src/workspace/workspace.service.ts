@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { MembershipRole } from '@prisma/client';
+import { MembershipRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TRIAL_QUOTAS } from '../trial/trial.constants';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
@@ -10,6 +10,16 @@ export class WorkspaceService {
 
   async getDashboard(organisationId: string, userId: string, role: MembershipRole) {
     return this.prisma.forOrganisation(organisationId, async (transaction) => {
+      const membership = await transaction.membership.findUniqueOrThrow({ where: { organisationId_userId_role: { organisationId, userId, role } } });
+      const courseWhere: Prisma.CourseWhereInput = { organisationId };
+      if (role === MembershipRole.TEACHER) {
+        courseWhere.classes = { some: { class: { teachers: { some: { teacherMembershipId: membership.id } } } } };
+      } else if (role === MembershipRole.STUDENT) {
+        courseWhere.published = true;
+        courseWhere.classes = { some: { class: { students: { some: { studentMembershipId: membership.id } } } } };
+      } else if (role !== MembershipRole.ORGANISATION_ADMIN) {
+        courseWhere.id = { equals: '00000000-0000-0000-0000-000000000000' };
+      }
       const [organisation, user, branches, courses, announcements, courseCount, lessonCount, assignmentCount, memberCount, fileCount] =
         await Promise.all([
           transaction.organisation.findUniqueOrThrow({
@@ -31,15 +41,20 @@ export class WorkspaceService {
           transaction.user.findUniqueOrThrow({ where: { id: userId }, select: { id: true, email: true } }),
           transaction.branch.findMany({ where: { organisationId }, orderBy: { name: 'asc' } }),
           transaction.course.findMany({
-            where: { organisationId },
-            include: { lessons: { orderBy: { position: 'asc' } }, assignments: { orderBy: { dueAt: 'asc' } } },
+            where: courseWhere,
+            include: {
+              lessons: { where: role === MembershipRole.STUDENT ? { published: true } : undefined, include: role === MembershipRole.STUDENT ? { progress: { where: { studentMembershipId: membership.id } } } : undefined, orderBy: { position: 'asc' } },
+              assignments: { orderBy: { dueAt: 'asc' } },
+              quizzes: { where: role === MembershipRole.STUDENT ? { published: true } : undefined, orderBy: { createdAt: 'desc' } },
+              classes: { include: { class: { select: { id: true, name: true } } } },
+            },
             orderBy: { updatedAt: 'desc' },
             take: 12,
           }),
           transaction.announcement.findMany({ where: { organisationId }, orderBy: { publishedAt: 'desc' }, take: 10 }),
-          transaction.course.count({ where: { organisationId } }),
-          transaction.lesson.count({ where: { course: { organisationId } } }),
-          transaction.assignment.count({ where: { course: { organisationId } } }),
+          transaction.course.count({ where: courseWhere }),
+          transaction.lesson.count({ where: { course: courseWhere } }),
+          transaction.assignment.count({ where: { course: courseWhere } }),
           transaction.membership.count({ where: { organisationId } }),
           transaction.storedFile.count({ where: { organisationId, status: 'READY' } }),
         ]);
@@ -56,7 +71,7 @@ export class WorkspaceService {
         capabilities: {
           canAuthor: role === MembershipRole.TEACHER || role === MembershipRole.ORGANISATION_ADMIN,
           canManageOrganisation: role === MembershipRole.ORGANISATION_ADMIN,
-          canUpload: true,
+          canUpload: role !== MembershipRole.GUARDIAN,
         },
       };
     });

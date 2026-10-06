@@ -16,7 +16,10 @@ describe('interactive trial workspace', () => {
       announcement: { findMany: vi.fn().mockResolvedValue([]) },
       lesson: { count: vi.fn().mockResolvedValue(4) },
       assignment: { count: vi.fn().mockResolvedValue(3) },
-      membership: { count: vi.fn().mockResolvedValue(5) },
+      membership: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'membership-id' }),
+        count: vi.fn().mockResolvedValue(5),
+      },
       storedFile: { count: vi.fn().mockResolvedValue(1) },
     };
     const prisma = {

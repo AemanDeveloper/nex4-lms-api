@@ -15,7 +15,7 @@ export class StorageController {
 
   @Get()
   list(@Req() request: MemberRequest) {
-    return this.storage.list(request.member.organisationId);
+    return this.storage.list(request.member.organisationId, request.member.sub, request.member.role);
   }
 
   @Post('upload-intents')
@@ -30,11 +30,11 @@ export class StorageController {
 
   @Get(':id/download')
   download(@Req() request: MemberRequest, @Param('id', ParseUUIDPipe) id: string) {
-    return this.storage.createDownload(request.member.organisationId, id);
+    return this.storage.createDownload(request.member.organisationId, request.member.sub, request.member.role, id);
   }
 
   @Delete(':id')
   remove(@Req() request: MemberRequest, @Param('id', ParseUUIDPipe) id: string) {
-    return this.storage.remove(request.member.organisationId, request.member.sub, id);
+    return this.storage.remove(request.member.organisationId, request.member.sub, request.member.role, id);
   }
 }
