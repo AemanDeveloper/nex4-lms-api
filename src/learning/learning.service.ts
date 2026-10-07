@@ -537,7 +537,7 @@ export class LearningService {
         );
         return transaction.assignmentSubmission.findUniqueOrThrow({
           where: { id: submission.id },
-          include: { attachment: { include: { storedFile: true } } },
+          include: { attachment: { include: { storedFile: { select: { id: true, fileName: true, contentType: true } } } } },
         });
       },
     );
@@ -564,7 +564,7 @@ export class LearningService {
           );
           return transaction.assignmentSubmission.findMany({
             where: { assignmentId, studentMembershipId: membership.id },
-            include: { attachment: { include: { storedFile: true } } },
+            include: { attachment: { include: { storedFile: { select: { id: true, fileName: true, contentType: true } } } } },
           });
         }
         this.requireStaff(actor.role);
@@ -575,7 +575,7 @@ export class LearningService {
             student: {
               include: { user: { select: { id: true, email: true } } },
             },
-            attachment: { include: { storedFile: true } },
+            attachment: { include: { storedFile: { select: { id: true, fileName: true, contentType: true } } } },
           },
           orderBy: { updatedAt: 'desc' },
         });
@@ -1110,7 +1110,7 @@ export class LearningService {
             student: {
               include: { user: { select: { id: true, email: true } } },
             },
-            answers: { include: { question: true, storedFile: true } },
+            answers: { include: { question: true, storedFile: { select: { id: true, fileName: true, contentType: true } } } },
           },
           orderBy: [{ submittedAt: 'desc' }, { attemptNumber: 'desc' }],
         });

@@ -206,6 +206,7 @@ export class InvitationService {
     return this.prisma.forOrganisation(organisationId, async (transaction) => {
       const invitation = await transaction.invitation.findUnique({
         where: { tokenHash: hashToken(input.token) },
+        include: { organisation: { select: { slug: true } } },
       });
       if (!invitation || invitation.organisationId !== organisationId) {
         throw new NotFoundException({
@@ -288,6 +289,7 @@ export class InvitationService {
         email: user.email,
         role: membership.role,
         organisationId,
+        organisationSlug: invitation.organisation.slug,
       };
     });
   }
