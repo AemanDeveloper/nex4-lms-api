@@ -203,6 +203,11 @@ export class InvitationService {
         message: 'This invitation link is invalid.',
       });
     }
+    // Argon2 is intentionally expensive and can exceed Prisma's interactive
+    // transaction timeout on small production instances. Hash first so the
+    // tenant-scoped transaction only contains database work.
+    const newPasswordHash = await argon2.hash(input.password);
+
     return this.prisma.forOrganisation(organisationId, async (transaction) => {
       const invitation = await transaction.invitation.findUnique({
         where: { tokenHash: hashToken(input.token) },
@@ -238,8 +243,7 @@ export class InvitationService {
       const existing = await transaction.user.findUnique({
         where: { email: invitation.email },
       });
-      const passwordHash =
-        existing?.passwordHash ?? (await argon2.hash(input.password));
+      const passwordHash = existing?.passwordHash ?? newPasswordHash;
       const user = existing
         ? await transaction.user.update({
             where: { id: existing.id },
