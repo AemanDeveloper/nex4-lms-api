@@ -16,8 +16,9 @@ export class MemberAuthGuard implements CanActivate {
       const claims = this.jwt.verify<MemberClaims>(token, { secret: this.config.getOrThrow<string>('AUTH_JWT_SECRET'), audience: 'nex4-app' });
       const membership = await this.prisma.forOrganisation(claims.organisationId, (transaction) => transaction.membership.findUnique({
         where: { organisationId_userId_role: { organisationId: claims.organisationId, userId: claims.sub, role: claims.role } },
+        include: { organisation: { select: { status: true } } },
       }));
-      if (!membership) throw new Error('invalid');
+      if (!membership || ['SUSPENDED', 'PENDING_DELETION', 'DELETED'].includes(membership.organisation.status)) throw new Error('invalid');
       request.member = claims;
       return true;
     } catch {

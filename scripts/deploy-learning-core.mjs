@@ -10,33 +10,37 @@ if (!databaseUrl) {
 
 const client = new pg.Client({ connectionString: databaseUrl });
 
+async function applyMigration(relativePath, installedQuery, label) {
+  const { rows } = await client.query(installedQuery);
+  if (rows[0]?.installed) {
+    console.log(`${label} is already installed.`);
+    return;
+  }
+
+  const migration = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+  await client.query('BEGIN');
+  try {
+    await client.query(migration);
+    await client.query('COMMIT');
+    console.log(`${label} installed successfully.`);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+}
+
 try {
   await client.connect();
-  const { rows } = await client.query(
+  await applyMigration(
+    '../prisma/migrations/202610060001_learning_core/migration.sql',
     "select to_regclass('public.invitations') is not null as installed",
+    'Learning Core schema',
   );
-
-  if (rows[0]?.installed) {
-    console.log('Learning Core schema is already installed.');
-  } else {
-    const migration = await readFile(
-      new URL(
-        '../prisma/migrations/202610060001_learning_core/migration.sql',
-        import.meta.url,
-      ),
-      'utf8',
-    );
-
-    await client.query('BEGIN');
-    try {
-      await client.query(migration);
-      await client.query('COMMIT');
-      console.log('Learning Core schema installed successfully.');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    }
-  }
+  await applyMigration(
+    '../prisma/migrations/202610070001_profile_management/migration.sql',
+    "select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'users' and column_name = 'avatarFileId') as installed",
+    'Profile schema',
+  );
 } finally {
   await client.end();
 }

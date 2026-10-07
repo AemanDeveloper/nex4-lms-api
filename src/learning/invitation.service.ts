@@ -250,6 +250,7 @@ export class InvitationService {
             data: {
               emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
               passwordHash,
+              defaultOrganisationId: existing.defaultOrganisationId ?? organisationId,
             },
           })
         : await transaction.user.create({
@@ -257,6 +258,7 @@ export class InvitationService {
               email: invitation.email,
               emailVerifiedAt: new Date(),
               passwordHash,
+              defaultOrganisationId: organisationId,
             },
           });
       const membership = await transaction.membership.upsert({

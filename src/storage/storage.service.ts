@@ -181,6 +181,32 @@ export class StorageService {
     return { downloadUrl, expiresInSeconds: 300 };
   }
 
+  async createImagePreview(organisationId: string, userId: string, role: MembershipRole, fileId: string) {
+    const file = await this.prisma.forOrganisation(organisationId, (transaction) =>
+      transaction.storedFile.findFirst({
+        where: {
+          id: fileId,
+          organisationId,
+          status: 'READY',
+          contentType: { startsWith: 'image/' },
+          ...(role === MembershipRole.ORGANISATION_ADMIN ? {} : { uploadedByUserId: userId }),
+        },
+      }),
+    );
+    if (!file) throw new NotFoundException();
+    const previewUrl = await getSignedUrl(
+      this.getClient(),
+      new GetObjectCommand({
+        Bucket: this.bucket(),
+        Key: file.objectKey,
+        ResponseContentType: file.contentType,
+        ResponseContentDisposition: 'inline',
+      }),
+      { expiresIn: 300 },
+    );
+    return { previewUrl, expiresInSeconds: 300 };
+  }
+
   async remove(organisationId: string, userId: string, role: MembershipRole, fileId: string) {
     const file = await this.prisma.forOrganisation(organisationId, (transaction) =>
       transaction.storedFile.findFirst({ where: { id: fileId, organisationId, status: 'READY' } }),
