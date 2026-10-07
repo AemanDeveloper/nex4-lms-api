@@ -12,9 +12,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async forOrganisation<T>(organisationId: string, operation: (transaction: Prisma.TransactionClient) => Promise<T>) {
-    return this.$transaction(async (transaction) => {
-      await transaction.$executeRaw`SELECT set_config('app.current_organisation_id', ${organisationId}, true)`;
-      return operation(transaction);
-    });
+    return this.$transaction(
+      async (transaction) => {
+        await transaction.$executeRaw`SELECT set_config('app.current_organisation_id', ${organisationId}, true)`;
+        return operation(transaction);
+      },
+      {
+        maxWait: 5_000,
+        timeout: 30_000,
+      },
+    );
   }
 }
