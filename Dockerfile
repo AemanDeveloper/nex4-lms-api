@@ -18,7 +18,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY prisma ./prisma
+COPY scripts ./scripts
 COPY --from=build /app/dist ./dist
 USER node
 EXPOSE 4000
-CMD ["node", "dist/src/main.js"]
+CMD ["sh", "-c", "npm run db:learning-core:deploy && node dist/src/main.js"]

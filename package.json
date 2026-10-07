@@ -21,6 +21,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
+    "db:learning-core:deploy": "node scripts/deploy-learning-core.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "owner:provision": "tsx src/scripts/provision-owner.ts",
     "owner:mfa:generate": "tsx src/scripts/generate-owner-mfa.ts",
