@@ -33,6 +33,11 @@ export class StorageController {
     return this.storage.createDownload(request.member.organisationId, request.member.sub, request.member.role, id);
   }
 
+  @Get(':id/preview')
+  preview(@Req() request: MemberRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.storage.createImagePreview(request.member.organisationId, request.member.sub, request.member.role, id);
+  }
+
   @Delete(':id')
   remove(@Req() request: MemberRequest, @Param('id', ParseUUIDPipe) id: string) {
     return this.storage.remove(request.member.organisationId, request.member.sub, request.member.role, id);

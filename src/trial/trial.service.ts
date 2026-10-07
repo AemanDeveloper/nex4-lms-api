@@ -242,6 +242,10 @@ export class TrialService {
             memberships: { create: { userId: user.id, role: MembershipRole.ORGANISATION_ADMIN } },
           },
         });
+        await transaction.user.update({
+          where: { id: user.id },
+          data: { defaultOrganisationId: created.id },
+        });
         await transaction.trialRequest.update({
           where: { id: record.id },
           data: { organisationId: created.id },

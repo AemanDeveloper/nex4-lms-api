@@ -91,6 +91,9 @@ enum QuizAttemptStatus {
 model User {
   id              String       @id @default(uuid(7)) @db.Uuid
   email           String       @unique
+  displayName     String?
+  avatarFileId    String?      @unique @db.Uuid
+  defaultOrganisationId String? @db.Uuid
   passwordHash    String?
   emailVerifiedAt DateTime?
   isPlatformOwner Boolean      @default(false)
@@ -101,7 +104,11 @@ model User {
   memberships     Membership[]
   auditEvents     AuditLog[]   @relation("AuditActor")
   storedFiles     StoredFile[] @relation("StoredFileUploader")
+  avatarFile      StoredFile?  @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  defaultOrganisation Organisation? @relation("UserDefaultOrganisation", fields: [defaultOrganisationId], references: [id], onDelete: SetNull)
   invitationsSent Invitation[] @relation("InvitationSender")
+
+  @@index([defaultOrganisationId])
 
   @@map("users")
 }
@@ -143,6 +150,7 @@ model Organisation {
   quizQuestions         QuizQuestion[]
   quizAttempts          QuizAttempt[]
   quizAnswers           QuizAnswer[]
+  defaultUsers          User[]                 @relation("UserDefaultOrganisation")
 
   @@index([status])
   @@map("organisations")
@@ -232,6 +240,7 @@ model StoredFile {
   updatedAt            DateTime              @updatedAt
   organisation         Organisation          @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   uploadedBy           User                  @relation("StoredFileUploader", fields: [uploadedByUserId], references: [id], onDelete: Cascade)
+  avatarFor            User?                 @relation("UserAvatar")
   submissionAttachment SubmissionAttachment?
   quizAnswers          QuizAnswer[]
 

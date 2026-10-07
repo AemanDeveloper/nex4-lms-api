@@ -35,4 +35,39 @@ describe('owner dashboard data', () => {
       { id: 'organisation-id', name: 'Bright Path', storageUsedBytes: '1048576' },
     ]);
   });
+
+  it('suspends an organisation and records the owner action', async () => {
+    const update = vi.fn();
+    const createAudit = vi.fn();
+    const prisma = {
+      organisation: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'organisation-id', status: 'TRIAL' }),
+        update,
+      },
+      auditLog: { create: createAudit },
+      $transaction: vi.fn().mockImplementation(async (operations: unknown[]) => Promise.all(operations)),
+    } as unknown as PrismaService;
+    const controller = new OwnerController({} as TrialService, prisma, {} as ConfigService);
+
+    await expect(controller.suspendOrganisation(
+      'organisation-id',
+      { reason: 'Account review' },
+      { owner: { sub: 'owner-id' } } as never,
+    )).resolves.toEqual({ id: 'organisation-id', status: 'SUSPENDED' });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'organisation-id' }, data: { status: 'SUSPENDED' } });
+    expect(createAudit).toHaveBeenCalledOnce();
+  });
+
+  it('requires the exact organisation slug before scheduling deletion', async () => {
+    const prisma = {
+      organisation: { findUnique: vi.fn().mockResolvedValue({ id: 'organisation-id', slug: 'bright-path', status: 'TRIAL' }) },
+    } as unknown as PrismaService;
+    const controller = new OwnerController({} as TrialService, prisma, {} as ConfigService);
+
+    await expect(controller.scheduleOrganisationDeletion(
+      'organisation-id',
+      { confirmation: 'Bright Path' },
+      { owner: { sub: 'owner-id' } } as never,
+    )).rejects.toMatchObject({ response: { code: 'CONFIRMATION_MISMATCH' } });
+  });
 });
