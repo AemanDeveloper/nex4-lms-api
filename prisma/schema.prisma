@@ -88,28 +88,34 @@ enum QuizAttemptStatus {
   GRADED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
 model User {
-  id              String       @id @default(uuid(7)) @db.Uuid
-  email           String       @unique
-  displayName     String?
-  avatarFileId    String?      @unique @db.Uuid
-  defaultOrganisationId String? @db.Uuid
-  passwordHash    String?
-  emailVerifiedAt DateTime?
-  isPlatformOwner Boolean      @default(false)
-  mfaEnrolledAt   DateTime?
-  mfaLastUsedStep BigInt?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  memberships     Membership[]
-  auditEvents     AuditLog[]   @relation("AuditActor")
-  storedFiles     StoredFile[] @relation("StoredFileUploader")
-  avatarFile      StoredFile?  @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
-  defaultOrganisation Organisation? @relation("UserDefaultOrganisation", fields: [defaultOrganisationId], references: [id], onDelete: SetNull)
-  invitationsSent Invitation[] @relation("InvitationSender")
+  id                    String        @id @default(uuid(7)) @db.Uuid
+  email                 String        @unique
+  displayName           String?
+  avatarFileId          String?       @unique @db.Uuid
+  defaultOrganisationId String?       @db.Uuid
+  passwordHash          String?
+  emailVerifiedAt       DateTime?
+  isPlatformOwner       Boolean       @default(false)
+  mfaEnrolledAt         DateTime?
+  mfaLastUsedStep       BigInt?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  memberships           Membership[]
+  auditEvents           AuditLog[]    @relation("AuditActor")
+  storedFiles           StoredFile[]  @relation("StoredFileUploader")
+  avatarFile            StoredFile?   @relation("UserAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  defaultOrganisation   Organisation? @relation("UserDefaultOrganisation", fields: [defaultOrganisationId], references: [id], onDelete: SetNull)
+  invitationsSent       Invitation[]  @relation("InvitationSender")
 
   @@index([defaultOrganisationId])
-
   @@map("users")
 }
 
@@ -150,6 +156,9 @@ model Organisation {
   quizQuestions         QuizQuestion[]
   quizAttempts          QuizAttempt[]
   quizAnswers           QuizAnswer[]
+  attendanceSessions    AttendanceSession[]
+  attendanceRecords     AttendanceRecord[]
+  timetableEntries      TimetableEntry[]
   defaultUsers          User[]                 @relation("UserDefaultOrganisation")
 
   @@index([status])
@@ -172,20 +181,23 @@ model Branch {
 }
 
 model Membership {
-  id                    String                 @id @default(uuid(7)) @db.Uuid
-  organisationId        String                 @db.Uuid
-  userId                String                 @db.Uuid
-  role                  MembershipRole
-  organisation          Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt             DateTime               @default(now())
-  teachingClasses       ClassTeacher[]         @relation("TeacherMembership")
-  enrolledClasses       ClassStudent[]         @relation("StudentMembership")
-  lessonProgress        LessonProgress[]       @relation("StudentLessonProgress")
-  assignmentSubmissions AssignmentSubmission[] @relation("StudentSubmissions")
-  gradedSubmissions     AssignmentSubmission[] @relation("SubmissionGrader")
-  quizAttempts          QuizAttempt[]          @relation("StudentQuizAttempts")
-  gradedQuizAttempts    QuizAttempt[]          @relation("QuizAttemptGrader")
+  id                        String                 @id @default(uuid(7)) @db.Uuid
+  organisationId            String                 @db.Uuid
+  userId                    String                 @db.Uuid
+  role                      MembershipRole
+  organisation              Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user                      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                 DateTime               @default(now())
+  teachingClasses           ClassTeacher[]         @relation("TeacherMembership")
+  enrolledClasses           ClassStudent[]         @relation("StudentMembership")
+  lessonProgress            LessonProgress[]       @relation("StudentLessonProgress")
+  assignmentSubmissions     AssignmentSubmission[] @relation("StudentSubmissions")
+  gradedSubmissions         AssignmentSubmission[] @relation("SubmissionGrader")
+  quizAttempts              QuizAttempt[]          @relation("StudentQuizAttempts")
+  gradedQuizAttempts        QuizAttempt[]          @relation("QuizAttemptGrader")
+  attendanceSessionsCreated AttendanceSession[]    @relation("AttendanceSessionCreator")
+  attendanceRecords         AttendanceRecord[]     @relation("StudentAttendance")
+  timetableEntriesCreated   TimetableEntry[]       @relation("TimetableEntryCreator")
 
   @@unique([organisationId, userId, role])
   @@index([organisationId])
@@ -250,18 +262,19 @@ model StoredFile {
 }
 
 model Course {
-  id             String        @id @default(uuid(7)) @db.Uuid
-  organisationId String        @db.Uuid
-  title          String
-  description    String
-  published      Boolean       @default(false)
-  organisation   Organisation  @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  lessons        Lesson[]
-  assignments    Assignment[]
-  classes        CourseClass[]
-  quizzes        Quiz[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id               String           @id @default(uuid(7)) @db.Uuid
+  organisationId   String           @db.Uuid
+  title            String
+  description      String
+  published        Boolean          @default(false)
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lessons          Lesson[]
+  assignments      Assignment[]
+  classes          CourseClass[]
+  quizzes          Quiz[]
+  timetableEntries TimetableEntry[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@index([organisationId])
   @@map("courses")
@@ -322,19 +335,21 @@ model Invitation {
 }
 
 model Class {
-  id             String         @id @default(uuid(7)) @db.Uuid
-  organisationId String         @db.Uuid
-  branchId       String?        @db.Uuid
-  name           String
-  code           String?
-  academicYear   String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  branch         Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  teachers       ClassTeacher[]
-  students       ClassStudent[]
-  courses        CourseClass[]
+  id                 String              @id @default(uuid(7)) @db.Uuid
+  organisationId     String              @db.Uuid
+  branchId           String?             @db.Uuid
+  name               String
+  code               String?
+  academicYear       String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  organisation       Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  branch             Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  teachers           ClassTeacher[]
+  students           ClassStudent[]
+  courses            CourseClass[]
+  attendanceSessions AttendanceSession[]
+  timetableEntries   TimetableEntry[]
 
   @@unique([organisationId, name])
   @@unique([organisationId, code])
@@ -534,6 +549,66 @@ model QuizAnswer {
   @@index([organisationId, attemptId])
   @@index([storedFileId])
   @@map("quiz_answers")
+}
+
+model AttendanceSession {
+  id                    String             @id @default(uuid(7)) @db.Uuid
+  organisationId        String             @db.Uuid
+  classId               String             @db.Uuid
+  attendanceDate        DateTime           @db.Date
+  notes                 String?
+  createdByMembershipId String             @db.Uuid
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organisation          Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  class                 Class              @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdBy             Membership         @relation("AttendanceSessionCreator", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+  records               AttendanceRecord[]
+
+  @@unique([classId, attendanceDate])
+  @@index([organisationId, attendanceDate])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id                  String            @id @default(uuid(7)) @db.Uuid
+  organisationId      String            @db.Uuid
+  sessionId           String            @db.Uuid
+  studentMembershipId String            @db.Uuid
+  status              AttendanceStatus
+  note                String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  organisation        Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  session             AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student             Membership        @relation("StudentAttendance", fields: [studentMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentMembershipId])
+  @@index([organisationId, studentMembershipId, status])
+  @@map("attendance_records")
+}
+
+model TimetableEntry {
+  id                    String       @id @default(uuid(7)) @db.Uuid
+  organisationId        String       @db.Uuid
+  classId               String       @db.Uuid
+  courseId              String?      @db.Uuid
+  title                 String
+  startsAt              DateTime
+  endsAt                DateTime
+  location              String?
+  notes                 String?
+  createdByMembershipId String       @db.Uuid
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  organisation          Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  class                 Class        @relation(fields: [classId], references: [id], onDelete: Cascade)
+  course                Course?      @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  createdBy             Membership   @relation("TimetableEntryCreator", fields: [createdByMembershipId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId, startsAt])
+  @@index([classId, startsAt])
+  @@map("timetable_entries")
 }
 
 model Announcement {
