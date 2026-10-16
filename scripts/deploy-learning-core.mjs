@@ -48,7 +48,7 @@ try {
   );
   await applyMigration(
     '../prisma/migrations/202610160002_attendance_timetable_indexes/migration.sql',
-    "select to_regclass('public.attendance_sessions_createdByMembershipId_idx') is not null as installed",
+    "select exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname = 'attendance_sessions_createdByMembershipId_idx') as installed",
     'Attendance and timetable indexes',
   );
 } finally {
