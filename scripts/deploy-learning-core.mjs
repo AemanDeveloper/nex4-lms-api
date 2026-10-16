@@ -41,6 +41,16 @@ try {
     "select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'users' and column_name = 'avatarFileId') as installed",
     'Profile schema',
   );
+  await applyMigration(
+    '../prisma/migrations/202610160001_attendance_timetable/migration.sql',
+    "select to_regclass('public.attendance_sessions') is not null as installed",
+    'Attendance and timetable schema',
+  );
+  await applyMigration(
+    '../prisma/migrations/202610160002_attendance_timetable_indexes/migration.sql',
+    "select to_regclass('public.attendance_sessions_createdByMembershipId_idx') is not null as installed",
+    'Attendance and timetable indexes',
+  );
 } finally {
   await client.end();
 }
