@@ -1,4 +1,4 @@
-FROM node:24-alpine AS dependencies
+FROM node:24.22.1-alpine AS dependencies
 WORKDIR /app
 RUN npm install --global npm@11.9.0
 COPY package*.json ./
@@ -12,7 +12,7 @@ FROM dependencies AS build
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine AS runtime
+FROM node:24.22.1-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package*.json ./
