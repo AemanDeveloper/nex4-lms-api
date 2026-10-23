@@ -10,7 +10,7 @@ export class OrganisationWriteGuard implements CanActivate {
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<MemberRequest>();
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return true;
-    const organisation = await this.prisma.organisation.findUnique({ where: { id: request.member.organisationId }, select: { status: true, subscriptionStatus: true } });
+    const organisation = await this.prisma.organisation.findUnique({ where: { id: request.member.organisationId }, select: { status: true, subscriptionStatus: true, trialEndsAt: true } });
     const lockedStatuses = new Set<OrganisationStatus>([
       OrganisationStatus.READ_ONLY,
       OrganisationStatus.SUSPENDED,
@@ -19,6 +19,10 @@ export class OrganisationWriteGuard implements CanActivate {
     ]);
     if (!organisation || lockedStatuses.has(organisation.status)) {
       throw new ForbiddenException({ code: 'WORKSPACE_READ_ONLY', message: 'This workspace is read-only. An organisation administrator can restore access from billing.' });
+    }
+    if (organisation.status === OrganisationStatus.TRIAL && organisation.subscriptionStatus !== SubscriptionStatus.ACTIVE &&
+      (!organisation.trialEndsAt || organisation.trialEndsAt.getTime() <= Date.now())) {
+      throw new ForbiddenException({ code: 'WORKSPACE_READ_ONLY', message: 'Your trial has expired. An organisation administrator can subscribe to restore access.' });
     }
     if (organisation.status !== OrganisationStatus.TRIAL && organisation.subscriptionStatus !== SubscriptionStatus.ACTIVE) {
       throw new ForbiddenException({ code: 'WORKSPACE_READ_ONLY', message: 'An active subscription is required for changes.' });
