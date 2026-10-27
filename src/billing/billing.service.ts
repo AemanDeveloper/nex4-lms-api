@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { OrganisationStatus, SubscriptionPlan, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCheckoutDto } from './dto/create-checkout.dto';
+import { PAID_PLANS } from './plan-quotas';
 
 @Injectable()
 export class BillingService {
@@ -15,6 +16,9 @@ export class BillingService {
   }
 
   async createCheckout(organisationId: string, input: CreateCheckoutDto) {
+    if (!['STARTER', 'GROWTH'].includes(input.plan) || input.currency !== 'MYR' || input.interval !== 'MONTHLY') {
+      throw new BadRequestException('Only Starter and Growth monthly MYR plans are available.');
+    }
     if (!this.stripe) throw new ServiceUnavailableException({ code: 'BILLING_NOT_CONFIGURED', message: 'Subscription checkout is not available yet. Please contact support.' });
     const organisation = await this.prisma.organisation.findUnique({ where: { id: organisationId } });
     if (!organisation) throw new BadRequestException({ code: 'ORGANISATION_NOT_FOUND', message: 'The organisation could not be found.' });
@@ -29,6 +33,10 @@ export class BillingService {
     }
     const priceId = this.config.get<string>(`STRIPE_${input.plan}_${input.currency}_${input.interval}_PRICE_ID`);
     if (!priceId) throw new ServiceUnavailableException({ code: 'PRICE_NOT_CONFIGURED', message: 'This plan is not available in the selected currency and interval.' });
+    const price = await this.stripe.prices.retrieve(priceId);
+    if (!price.active || price.currency !== 'myr' || price.unit_amount !== PAID_PLANS[input.plan].monthlyMyr * 100 || price.recurring?.interval !== 'month' || price.recurring.interval_count !== 1) {
+      throw new ServiceUnavailableException({ code: 'PRICE_CONFIGURATION_INVALID', message: 'The subscription price requires administrator attention.' });
+    }
     const customer = organisation.stripeCustomerId
       ? organisation.stripeCustomerId
       : (await this.stripe.customers.create({ name: organisation.name, metadata: { organisationId } })).id;
@@ -39,6 +47,23 @@ export class BillingService {
       success_url: `${webUrl}/workspace?checkout=success`, cancel_url: `${webUrl}/workspace?checkout=cancelled`,
       subscription_data: { metadata: { organisationId, plan: input.plan } }, metadata: { organisationId, plan: input.plan },
     });
+    return { checkoutUrl: session.url };
+  }
+
+  async getPlans(organisationId: string) {
+    const organisation = await this.prisma.organisation.findUniqueOrThrow({ where: { id: organisationId }, select: { subscriptionPlan: true, subscriptionStatus: true, stripeCustomerId: true } });
+    return {
+      currentPlan: organisation.subscriptionPlan, status: organisation.subscriptionStatus,
+      canManageBilling: Boolean(this.stripe && organisation.stripeCustomerId),
+      plans: Object.entries(PAID_PLANS).map(([id, plan]) => ({ id, ...plan, available: Boolean(this.stripe && this.config.get(`STRIPE_${id}_MYR_MONTHLY_PRICE_ID`)) })),
+    };
+  }
+
+  async createPortal(organisationId: string) {
+    if (!this.stripe) throw new ServiceUnavailableException('Billing is not configured.');
+    const organisation = await this.prisma.organisation.findUniqueOrThrow({ where: { id: organisationId } });
+    if (!organisation.stripeCustomerId || ['SUSPENDED', 'PENDING_DELETION', 'DELETED'].includes(organisation.status)) throw new ForbiddenException('Billing access is unavailable.');
+    const session = await this.stripe.billingPortal.sessions.create({ customer: organisation.stripeCustomerId, return_url: `${this.config.getOrThrow<string>('PUBLIC_WEB_URL')}/workspace/billing` });
     return { checkoutUrl: session.url };
   }
 
@@ -55,8 +80,19 @@ export class BillingService {
       // Deliveries can arrive out of order: reconcile against Stripe's current state.
       const subscription = await this.stripe.subscriptions.retrieve(event.data.object.id);
       const organisationId = subscription.metadata.organisationId;
-      const plan = subscription.metadata.plan as SubscriptionPlan | undefined;
-      if (organisationId && plan && Object.values(SubscriptionPlan).includes(plan) && ['active', 'trialing'].includes(subscription.status)) {
+      // Metadata is not an entitlement: only the configured, single-unit paid price
+      // can activate a plan. Portal plan changes must follow the actual price too.
+      const items = subscription.items?.data ?? [];
+      const item = items.length === 1 ? items[0] : undefined;
+      const plan = ([SubscriptionPlan.STARTER, SubscriptionPlan.GROWTH] as const).find((candidate) => {
+        const priceId = this.config.get<string>(`STRIPE_${candidate}_MYR_MONTHLY_PRICE_ID`);
+        return Boolean(priceId && item?.price.id === priceId && item.quantity === 1
+          && item.price.currency === 'myr'
+          && item.price.unit_amount === PAID_PLANS[candidate].monthlyMyr * 100
+          && item.price.recurring?.interval === 'month'
+          && item.price.recurring.interval_count === 1);
+      });
+      if (organisationId && plan && subscription.status === 'active') {
         const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
         await this.prisma.$transaction(async (transaction) => {
           const updated = await transaction.organisation.updateMany({

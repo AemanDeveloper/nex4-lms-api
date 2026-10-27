@@ -12,7 +12,8 @@ import * as argon2 from 'argon2';
 import { createOpaqueToken, hashToken } from '../common/hash-token';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TRIAL_ACTIVATION_DAYS, TRIAL_QUOTAS } from '../trial/trial.constants';
+import { TRIAL_ACTIVATION_DAYS } from '../trial/trial.constants';
+import { organisationQuotas } from '../billing/plan-quotas';
 import {
   AcceptInvitationDto,
   CreateInvitationDto,
@@ -324,10 +325,12 @@ export class InvitationService {
     role: MembershipRole,
     ignoredInvitationId?: string,
   ) {
+    const organisation = await transaction.organisation.findUniqueOrThrow({ where: { id: organisationId }, select: { subscriptionPlan: true, subscriptionStatus: true } });
+    const quotas = organisationQuotas(organisation);
     const limit =
       role === MembershipRole.TEACHER
-        ? TRIAL_QUOTAS.teachers
-        : TRIAL_QUOTAS.learners;
+        ? quotas.teachers
+        : quotas.learners;
     const [members, pending] = await Promise.all([
       transaction.membership.count({ where: { organisationId, role } }),
       transaction.invitation.count({
@@ -343,7 +346,7 @@ export class InvitationService {
     if (members + pending >= limit) {
       throw new ForbiddenException({
         code: 'TRIAL_QUOTA_EXCEEDED',
-        message: `The trial allows up to ${limit} ${role === MembershipRole.TEACHER ? 'teachers' : 'students'}.`,
+        message: `Your plan allows up to ${limit} ${role === MembershipRole.TEACHER ? 'teachers' : 'students'}.`,
       });
     }
   }

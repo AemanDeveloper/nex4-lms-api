@@ -19,7 +19,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { TRIAL_QUOTAS } from '../trial/trial.constants';
+import { organisationQuotas } from '../billing/plan-quotas';
 import { CreateUploadIntentDto } from './dto/create-upload-intent.dto';
 
 const allowedContentTypes = new Set([
@@ -54,10 +54,10 @@ export class StorageService {
 
     const organisation = await this.prisma.organisation.findUnique({
       where: { id: organisationId },
-      select: { storageUsedBytes: true },
+      select: { storageUsedBytes: true, subscriptionPlan: true, subscriptionStatus: true },
     });
     if (!organisation) throw new NotFoundException();
-    if (organisation.storageUsedBytes + BigInt(input.sizeBytes) > BigInt(TRIAL_QUOTAS.privateStorageBytes)) {
+    if (organisation.storageUsedBytes + BigInt(input.sizeBytes) > BigInt(organisationQuotas(organisation).privateStorageBytes)) {
       throw new PayloadTooLargeException({ code: 'STORAGE_QUOTA_EXCEEDED', message: 'The organisation storage quota would be exceeded.' });
     }
 
@@ -113,7 +113,8 @@ export class StorageService {
       `;
       const usedBytes = rows[0]?.storageUsedBytes;
       if (usedBytes === undefined) throw new NotFoundException();
-      if (usedBytes + pending.sizeBytes > BigInt(TRIAL_QUOTAS.privateStorageBytes)) {
+      const organisation = await transaction.organisation.findUniqueOrThrow({ where: { id: organisationId }, select: { subscriptionPlan: true, subscriptionStatus: true } });
+      if (usedBytes + pending.sizeBytes > BigInt(organisationQuotas(organisation).privateStorageBytes)) {
         throw new PayloadTooLargeException({ code: 'STORAGE_QUOTA_EXCEEDED', message: 'The organisation storage quota would be exceeded.' });
       }
 

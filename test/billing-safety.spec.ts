@@ -12,7 +12,7 @@ beforeEach(() => vi.resetAllMocks());
 function fixture() {
   const transaction = { organisation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) }, auditLog: { create: vi.fn() } };
   const prisma = { organisation: { findUnique: vi.fn(), updateMany: transaction.organisation.updateMany }, $transaction: vi.fn(async (operation) => operation(transaction)) };
-  const config = { get: vi.fn(() => 'test-key'), getOrThrow: vi.fn(() => 'test-secret') };
+  const config = { get: vi.fn((key: string) => key === 'STRIPE_STARTER_MYR_MONTHLY_PRICE_ID' ? 'price-starter' : key === 'STRIPE_GROWTH_MYR_MONTHLY_PRICE_ID' ? 'price-growth' : 'test-key'), getOrThrow: vi.fn(() => 'test-secret') };
   return { prisma, transaction, service: new BillingService(config as unknown as ConfigService, prisma as unknown as PrismaService) };
 }
 
@@ -37,7 +37,7 @@ describe('billing release safety', () => {
   it('matches the customer and excludes Owner-locked statuses atomically', async () => {
     const { service, transaction } = fixture();
     stripe.webhooks.constructEvent.mockReturnValue({ id: 'evt-1', type: 'customer.subscription.updated', data: { object: { id: 'sub-1' } } });
-    stripe.subscriptions.retrieve.mockResolvedValue({ id: 'sub-1', customer: 'cus-1', status: 'active', metadata: { organisationId: 'org', plan: 'STARTER' } });
+    stripe.subscriptions.retrieve.mockResolvedValue({ id: 'sub-1', customer: 'cus-1', status: 'active', metadata: { organisationId: 'org', plan: 'STARTER' }, items: { data: [{ quantity: 1, price: { id: 'price-starter', currency: 'myr', unit_amount: 30000, recurring: { interval: 'month', interval_count: 1 } } }] } });
     await service.handleWebhook(Buffer.from('{}'), 'valid');
     expect(transaction.organisation.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ stripeCustomerId: 'cus-1', status: { in: ['TRIAL', 'ACTIVE', 'READ_ONLY'] } }) }));
     expect(transaction.auditLog.create).not.toHaveBeenCalled();
@@ -46,6 +46,13 @@ describe('billing release safety', () => {
     const { service, transaction } = fixture();
     stripe.webhooks.constructEvent.mockReturnValue({ type: 'customer.subscription.updated', data: { object: { id: 'sub-1', status: 'active' } } });
     stripe.subscriptions.retrieve.mockResolvedValue({ status: 'canceled', metadata: { organisationId: 'org', plan: 'STARTER' } });
+    await service.handleWebhook(Buffer.from('{}'), 'valid');
+    expect(transaction.organisation.updateMany).not.toHaveBeenCalled();
+  });
+  it.each(['price-unknown', 'price-growth'])('does not grant Starter access from metadata for invalid price %s', async (priceId) => {
+    const { service, transaction } = fixture();
+    stripe.webhooks.constructEvent.mockReturnValue({ type: 'customer.subscription.updated', data: { object: { id: 'sub-1' } } });
+    stripe.subscriptions.retrieve.mockResolvedValue({ status: 'active', metadata: { organisationId: 'org', plan: 'STARTER' }, items: { data: [{ quantity: 1, price: { id: priceId, currency: 'myr', unit_amount: 30000, recurring: { interval: 'month', interval_count: 1 } } }] } });
     await service.handleWebhook(Buffer.from('{}'), 'valid');
     expect(transaction.organisation.updateMany).not.toHaveBeenCalled();
   });

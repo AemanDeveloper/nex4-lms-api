@@ -54,6 +54,7 @@ describe('learning core access boundaries', () => {
 
   it('counts pending invitations when enforcing trial role quotas', async () => {
     const transaction = {
+      organisation: { findUniqueOrThrow: vi.fn().mockResolvedValue({ subscriptionStatus: 'TRIALING' }) },
       user: { findUnique: vi.fn().mockResolvedValue(null) },
       invitation: {
         findFirst: vi.fn().mockResolvedValue(null),

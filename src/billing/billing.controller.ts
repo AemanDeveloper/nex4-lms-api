@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Headers, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Post, Req, UseGuards } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -12,6 +12,20 @@ import { CreateCheckoutDto } from './dto/create-checkout.dto';
 @Controller('billing')
 export class BillingController {
   constructor(private readonly billing: BillingService) {}
+
+  @UseGuards(MemberAuthGuard)
+  @Get('plans')
+  plans(@Req() request: MemberRequest) {
+    if (request.member.role !== MembershipRole.ORGANISATION_ADMIN) throw new BadRequestException('An organisation administrator must manage billing.');
+    return this.billing.getPlans(request.member.organisationId);
+  }
+
+  @UseGuards(MemberAuthGuard)
+  @Post('portal')
+  portal(@Req() request: MemberRequest) {
+    if (request.member.role !== MembershipRole.ORGANISATION_ADMIN) throw new BadRequestException('An organisation administrator must manage billing.');
+    return this.billing.createPortal(request.member.organisationId);
+  }
 
   @ApiBearerAuth()
   @UseGuards(MemberAuthGuard)

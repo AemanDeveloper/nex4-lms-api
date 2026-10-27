@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { MembershipRole, Prisma } from '@prisma/client';
 import { hash, verify } from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
-import { TRIAL_QUOTAS } from '../trial/trial.constants';
+import { organisationQuotas } from '../billing/plan-quotas';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { ChangeEmailDto, ChangePasswordDto, UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -66,7 +66,7 @@ export class WorkspaceService {
         role,
         organisation: { ...organisation, storageUsedBytes: organisation.storageUsedBytes.toString() },
         branches,
-        quotas: TRIAL_QUOTAS,
+        quotas: organisationQuotas(organisation),
         metrics: { courses: courseCount, lessons: lessonCount, assignments: assignmentCount, members: memberCount, files: fileCount },
         courses,
         announcements,

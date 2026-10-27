@@ -1,13 +1,13 @@
 import { IsIn } from 'class-validator';
 
 export class CreateCheckoutDto {
-  @IsIn(['STARTER', 'GROWTH', 'ENTERPRISE'])
-  plan!: 'STARTER' | 'GROWTH' | 'ENTERPRISE';
+  @IsIn(['STARTER', 'GROWTH'])
+  plan!: 'STARTER' | 'GROWTH';
 
-  @IsIn(['MYR', 'USD'])
-  currency!: 'MYR' | 'USD';
+  @IsIn(['MYR'])
+  currency!: 'MYR';
 
-  @IsIn(['MONTHLY', 'ANNUAL'])
-  interval!: 'MONTHLY' | 'ANNUAL';
+  @IsIn(['MONTHLY'])
+  interval!: 'MONTHLY';
 }
 
